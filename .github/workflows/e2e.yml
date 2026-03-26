@@ -7,16 +7,25 @@ jobs:
   e2e-tests:
     runs-on: self-hosted
     steps:
-      - name: Clean workspace before checkout
+      - name: Kill lingering browser processes
         run: |
-          if (Test-Path "${{ github.workspace }}") {
-            cmd /c "rmdir /s /q `"${{ github.workspace }}`"" 2>$null
-            New-Item -ItemType Directory -Path "${{ github.workspace }}" -Force | Out-Null
+          Get-Process chrome, chromedriver -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+        continue-on-error: true
+
+      - name: Clean locked files from workspace
+        run: |
+          $ws = "${{ github.workspace }}"
+          foreach ($dir in '.pytest_cache', '__pycache__', 'selenium\.pytest_cache', 'selenium\__pycache__') {
+            $p = Join-Path $ws $dir
+            if (Test-Path $p) {
+              attrib -r -h -s "$p\*" /s /d 2>$null
+              Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue
+            }
           }
+        continue-on-error: true
 
       - uses: actions/checkout@v4
-        with:
-          clean: false
 
       - name: Mark workspace as safe directory
         run: git config --global --add safe.directory "${{ github.workspace }}"
